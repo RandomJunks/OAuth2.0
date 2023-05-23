@@ -42,16 +42,50 @@ app.get("/", function (req, res) {
   res.render("index", { access_token: access_token, scope: scope });
 });
 
+//  Send the user to the authorization server
 app.get("/authorize", function (req, res) {
-  /*
-   * Send the user to the authorization server
-   */
+  var authorizeUrl = buildUrl(authServer.authorizationEndpoint, {
+    response_type: "code",
+    client_id: client.client_id,
+    redirect_uri: client.redirect_uris[0],
+  });
+
+  res.redirect(authorizeUrl);
 });
 
+// Parse the response from the authorization server and get a token
 app.get("/callback", function (req, res) {
-  /*
-   * Parse the response from the authorization server and get a token
-   */
+  // because request is coming in as redirect from the auth server, and not as a HTTP response to our direct request.
+  var code = req.query.code;
+
+  // creating HTTP POST
+  var form_data = qs.stringify({
+    grant_type: "authorization_code",
+    code: code,
+    redirect_uri: client.redirect_uris[0], // as per oauth specification, if request is used in auth request, we must do the same in token request.
+  });
+
+  var headers = {
+    "Content-Type": "application/x-www-form-urlencoded",
+    Authorization:
+      "Basic " +
+      encodeClientCredentials(client.client_id, client.client_secret),
+  };
+
+  // token response
+  var tokRes = request("POST", authServer.tokenEndpoint, {
+    body: form_data,
+    headers: headers,
+  });
+
+  console.log("Requesting access token for code %s", code);
+
+  var body = JSON.parse(tokRes.getBody());
+
+  access_token = body.access_token;
+  console.log("Got access token: %s", access_token);
+
+  res.render("index", { access_token: access_token });
 });
 
 app.get("/fetch_resource", function (req, res) {
@@ -87,5 +121,6 @@ app.use("/", express.static("files/client"));
 var server = app.listen(9000, "localhost", function () {
   var host = server.address().address;
   var port = server.address().port;
+  // host = "127.0.0.1";
   console.log("OAuth Client is listening at http://%s:%s", host, port);
 });
