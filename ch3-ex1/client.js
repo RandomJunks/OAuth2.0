@@ -54,7 +54,7 @@ app.get("/authorize", function (req, res) {
     response_type: "code",
     client_id: client.client_id,
     redirect_uri: client.redirect_uris[0],
-    // state: state,
+    state: state,
   });
 
   console.log("redirect", authorizeUrl);
