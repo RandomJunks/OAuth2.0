@@ -98,13 +98,20 @@ app.get("/callback", function (req, res) {
   });
 
   console.log("Requesting access token for code %s", code);
+  console.log("tokRes statuscode:", tokRes.statusCode);
+  if (tokRes.statusCode >= 200 || tokRes.statusCode > 300) {
+    var body = JSON.parse(tokRes.getBody());
 
-  var body = JSON.parse(tokRes.getBody());
+    access_token = body.access_token;
+    console.log("Got access token: %s", access_token);
 
-  access_token = body.access_token;
-  console.log("Got access token: %s", access_token);
-
-  res.render("index", { access_token: access_token });
+    res.render("index", { access_token: access_token });
+  } else {
+    res.render("error", {
+      error:
+        "Unable to fetch access token, server response: " + tokRes.statusCode,
+    });
+  }
 });
 
 // Use the access token to call the resource server
