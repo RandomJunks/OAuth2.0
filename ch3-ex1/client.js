@@ -6,6 +6,7 @@ var querystring = require("querystring");
 var cons = require("consolidate");
 var randomstring = require("randomstring");
 var __ = require("underscore");
+const { access } = require("fs");
 __.string = require("underscore.string");
 
 var app = express();
@@ -44,17 +45,35 @@ app.get("/", function (req, res) {
 
 //  Send the user to the authorization server
 app.get("/authorize", function (req, res) {
+  // throw out old access_token
+  access_token = null;
+  // instantiate state to prevent cross-site attack
+  state = randomstring.generate();
+
   var authorizeUrl = buildUrl(authServer.authorizationEndpoint, {
     response_type: "code",
     client_id: client.client_id,
     redirect_uri: client.redirect_uris[0],
+    // state: state,
   });
+
+  console.log("redirect", authorizeUrl);
 
   res.redirect(authorizeUrl);
 });
 
 // Parse the response from the authorization server and get a token
 app.get("/callback", function (req, res) {
+  if (req.query.state != state) {
+    console.log(
+      "State DOES NOT MATCH: expected %s got %s",
+      state,
+      req.query.state
+    );
+    res.render("error", { error: "State value did not match" });
+    return;
+  }
+
   // because request is coming in as redirect from the auth server, and not as a HTTP response to our direct request.
   var code = req.query.code;
 
@@ -88,10 +107,28 @@ app.get("/callback", function (req, res) {
   res.render("index", { access_token: access_token });
 });
 
+// Use the access token to call the resource server
 app.get("/fetch_resource", function (req, res) {
-  /*
-   * Use the access token to call the resource server
-   */
+  if (!access_token) {
+    res.render("error", { error: "Missing  access token" });
+  }
+
+  var headers = {
+    Authorization: "Bearer " + access_token,
+  };
+
+  var resource = request("POST", protectedResource, { headers: headers });
+
+  if (resource.statusCode >= 200 && resource.statusCode < 300) {
+    var body = JSON.parse(resource.getBody());
+    res.render("data", { resource: body });
+    return;
+  } else {
+    res.render("error", {
+      error: "Server returned response code: " + resource.statusCode,
+    });
+    return;
+  }
 });
 
 var buildUrl = function (base, options, hash) {
